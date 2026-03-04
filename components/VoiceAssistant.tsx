@@ -293,7 +293,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
       console.error("Voice initiation failed", err);
       stopSession();
     }
-  }, [language, dataContext, onUpdateDashboard, encode, decode, decodeAudioData, isActive, isConnecting, currentUserSpeech, currentThought, stopSession]);
+  }, [language, dataContext, onUpdateDashboard, encode, decode, decodeAudioData, isActive, isConnecting, stopSession]);
 
   // Cleanup on unmount
   useEffect(() => {
