@@ -24,19 +24,19 @@ const CaptionOverlay = React.memo(({ speech, thought, isRtl }: { speech: string,
   return (
     <div className="fixed bottom-24 md:bottom-32 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 pointer-events-none">
       <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 md:p-6 rounded-2xl shadow-2xl border border-white/20 text-center animate-in fade-in slide-in-from-bottom-6">
-         <p className={`text-lg md:text-xl font-medium ${isRtl ? 'rtl' : 'ltr'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-           {speech || thought}
-         </p>
-         <div className="mt-2 text-[10px] uppercase font-black text-indigo-400 tracking-widest">
-           {speech ? 'Detecting Voice...' : 'Advisor Speaking'}
-         </div>
+        <p className={`text-lg md:text-xl font-medium ${isRtl ? 'rtl' : 'ltr'}`} dir={isRtl ? 'rtl' : 'ltr'}>
+          {speech || thought}
+        </p>
+        <div className="mt-2 text-[10px] uppercase font-black text-indigo-400 tracking-widest">
+          {speech ? 'Detecting Voice...' : 'Advisor Speaking'}
+        </div>
       </div>
     </div>
   );
 });
 
-const TranscriptList = React.memo(({ transcript, helpText, currentUserSpeech, currentThought }: { 
-  transcript: { text: string, type: 'user' | 'model' }[], 
+const TranscriptList = React.memo(({ transcript, helpText, currentUserSpeech, currentThought }: {
+  transcript: { text: string, type: 'user' | 'model' }[],
   helpText: string,
   currentUserSpeech: string,
   currentThought: string
@@ -67,9 +67,9 @@ const TranscriptList = React.memo(({ transcript, helpText, currentUserSpeech, cu
   );
 });
 
-const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ 
-  language, 
-  dataContext, 
+const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
+  language,
+  dataContext,
   onUpdateDashboard,
   externalActive,
   onExternalClose
@@ -77,18 +77,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMinimized, setIsMinimized] = useState(true);
-
-  // Sync with external activation
-  useEffect(() => {
-    if (externalActive && !isActive && !isConnecting) {
-      setIsMinimized(false);
-      startSession();
-    }
-  }, [externalActive, isActive, isConnecting]);
   const [transcript, setTranscript] = useState<{ text: string, type: 'user' | 'model' }[]>([]);
   const [currentThought, setCurrentThought] = useState("");
   const [currentUserSpeech, setCurrentUserSpeech] = useState("");
-  
+
   const inputAudioContext = useRef<AudioContext | null>(null);
   const outputAudioContext = useRef<AudioContext | null>(null);
   const sources = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -134,39 +126,35 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     setIsActive(false);
     setIsConnecting(false);
     if (onExternalClose) onExternalClose();
-    
+
     if (workletNode.current) {
       workletNode.current.disconnect();
       workletNode.current = null;
     }
 
     if (inputAudioContext.current) {
-      try { inputAudioContext.current.close(); } catch (e) {}
+      try { inputAudioContext.current.close(); } catch (e) { }
       inputAudioContext.current = null;
     }
     if (outputAudioContext.current) {
-      try { outputAudioContext.current.close(); } catch (e) {}
+      try { outputAudioContext.current.close(); } catch (e) { }
       outputAudioContext.current = null;
     }
-    sources.current.forEach(s => { try { s.stop(); } catch (e) {} });
+    sources.current.forEach(s => { try { s.stop(); } catch (e) { } });
     sources.current.clear();
     setCurrentThought("");
     setCurrentUserSpeech("");
     sessionPromise.current = null;
   }, [onExternalClose]);
 
-  useEffect(() => {
-    return () => { if (isActive) stopSession(); };
-  }, [isActive, stopSession]);
-
-  const startSession = async () => {
+  const startSession = useCallback(async () => {
     if (isActive || isConnecting) return;
     setIsConnecting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       inputAudioContext.current = new AudioContext({ sampleRate: 16000 });
       outputAudioContext.current = new AudioContext({ sampleRate: 24000 });
-      
+
       // Load AudioWorklet for low-latency capture
       const workletCode = `
         class RecorderProcessor extends AudioWorkletProcessor {
@@ -192,26 +180,26 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
         onopen: () => {
           setIsActive(true);
           setIsConnecting(false);
-          
+
           const source = inputAudioContext.current!.createMediaStreamSource(stream);
           workletNode.current = new AudioWorkletNode(inputAudioContext.current!, 'recorder-processor');
-          
+
           workletNode.current.port.onmessage = (e) => {
             if (!sessionPromise.current) return;
             const inputData = e.data; // Float32Array
-            
+
             // Efficient PCM conversion
             const l = inputData.length;
             const int16 = new Int16Array(l);
             for (let i = 0; i < l; i++) {
               int16[i] = Math.max(-1, Math.min(1, inputData[i])) * 32767;
             }
-            
-            const pcmBlob: GenAIBlob = { 
-              data: encode(new Uint8Array(int16.buffer)), 
-              mimeType: 'audio/pcm;rate=16000' 
+
+            const pcmBlob: GenAIBlob = {
+              data: encode(new Uint8Array(int16.buffer)),
+              mimeType: 'audio/pcm;rate=16000'
             };
-            
+
             sessionPromise.current.then((session) => {
               session.sendRealtimeInput({ media: pcmBlob });
             });
@@ -225,9 +213,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
           if (message.toolCall) {
             for (const fc of message.toolCall.functionCalls) {
               if (fc.name === 'update_dashboard_filters') {
-                onUpdateDashboard(prev => ({ 
-                  ...prev, 
-                  filter: { ...prev.filter, ...fc.args } 
+                onUpdateDashboard(prev => ({
+                  ...prev,
+                  filter: { ...prev.filter, ...fc.args }
                 }));
               } else if (fc.name === 'highlight_metric') {
                 onUpdateDashboard(prev => ({ ...prev, highlightedMetric: fc.args.metric as any }));
@@ -249,7 +237,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
           } else if (message.serverContent?.inputTranscription) {
             setCurrentUserSpeech(prev => prev + message.serverContent!.inputTranscription!.text);
           }
-          
+
           if (message.serverContent?.turnComplete) {
             setTranscript(prev => {
               const newItems = [];
@@ -265,18 +253,18 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
           const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
           if (base64Audio && outputAudioContext.current) {
             if (outputAudioContext.current.state === 'suspended') await outputAudioContext.current.resume();
-            
+
             const buffer = await decodeAudioData(decode(base64Audio), outputAudioContext.current, 24000, 1);
             const source = outputAudioContext.current.createBufferSource();
             source.buffer = buffer;
             source.connect(outputNode);
-            
+
             // Precise scheduling to avoid gaps
             const now = outputAudioContext.current.currentTime;
             if (nextStartTime.current < now) {
               nextStartTime.current = now + 0.05; // Small buffer for first chunk
             }
-            
+
             source.start(nextStartTime.current);
             nextStartTime.current += buffer.duration;
             sources.current.add(source);
@@ -285,7 +273,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
 
           // 4. Interruption
           if (message.serverContent?.interrupted) {
-            sources.current.forEach(s => { try { s.stop(); } catch (e) {} });
+            sources.current.forEach(s => { try { s.stop(); } catch (e) { } });
             sources.current.clear();
             nextStartTime.current = 0;
             setCurrentThought("");
@@ -305,22 +293,36 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
       console.error("Voice initiation failed", err);
       stopSession();
     }
-  };
+  }, [language, dataContext, onUpdateDashboard, encode, decode, decodeAudioData, isActive, isConnecting, currentUserSpeech, currentThought, stopSession]);
 
-  const toggleAssistant = () => {
-    if (isActive || isConnecting) stopSession();
-    else {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { if (isActive) stopSession(); };
+  }, [isActive, stopSession]);
+
+  // Sync with external activation
+  useEffect(() => {
+    if (externalActive && !isActive && !isConnecting) {
       setIsMinimized(false);
       startSession();
     }
-  };
+  }, [externalActive, isActive, isConnecting, startSession]);
+
+  const toggleAssistant = useCallback(() => {
+    if (isActive || isConnecting) {
+      stopSession();
+    } else {
+      setIsMinimized(false);
+      startSession();
+    }
+  }, [isActive, isConnecting, stopSession, startSession]);
 
   return (
     <>
       {isActive && <CaptionOverlay speech={currentUserSpeech} thought={currentThought} isRtl={isRtl} />}
 
-      <button 
-        onClick={toggleAssistant} 
+      <button
+        onClick={toggleAssistant}
         disabled={isConnecting && !isActive}
         className={`fixed bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 md:left-auto ${isRtl ? 'md:left-8' : 'md:right-8'} md:translate-x-0 w-16 h-16 md:w-20 md:h-20 rounded-full shadow-2xl flex items-center justify-center transition-all z-40 ${isActive ? 'bg-rose-500 animate-pulse' : isConnecting ? 'bg-amber-500 animate-spin' : 'bg-indigo-600 hover:bg-indigo-700'}`}
       >
@@ -338,11 +340,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <TranscriptList 
-            transcript={transcript} 
-            helpText={t.help} 
-            currentUserSpeech={currentUserSpeech} 
-            currentThought={currentThought} 
+          <TranscriptList
+            transcript={transcript}
+            helpText={t.help}
+            currentUserSpeech={currentUserSpeech}
+            currentThought={currentThought}
           />
         </div>
       )}
