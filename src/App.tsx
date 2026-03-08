@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Download, Globe, BarChart3, FileText, Loader2 } from "lucide-react";
+import Markdown from "react-markdown";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
 import { Dashboard, ChartConfig } from "@/components/Dashboard";
 import { FileUpload } from "@/components/FileUpload";
@@ -25,6 +26,7 @@ export default function App() {
   const [isGeneratingDashboard, setIsGeneratingDashboard] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [report, setReport] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'report'>('dashboard');
 
   const {
     connect,
@@ -40,6 +42,7 @@ export default function App() {
     setData(loadedData);
     setFileName(name);
     setReport(null);
+    setActiveTab('dashboard');
 
     if (loadedData.length > 0) {
       setIsGeneratingDashboard(true);
@@ -68,16 +71,30 @@ export default function App() {
     }
   };
 
-  const handleDownloadReport = async () => {
+  const handleGenerateReport = async () => {
     if (data.length === 0) return;
+    setActiveTab('report');
+    if (report) return;
     
     setIsGeneratingReport(true);
     const generatedReport = await generateReport(data, language.name);
     setReport(generatedReport);
     setIsGeneratingReport(false);
+  };
+
+  const handleDownloadReport = async () => {
+    if (data.length === 0) return;
+    
+    let currentReport = report;
+    if (!currentReport) {
+      setIsGeneratingReport(true);
+      currentReport = await generateReport(data, language.name);
+      setReport(currentReport);
+      setIsGeneratingReport(false);
+    }
 
     // Create a Blob and trigger download
-    const blob = new Blob([generatedReport], { type: "text/markdown" });
+    const blob = new Blob([currentReport], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -177,11 +194,31 @@ export default function App() {
         {/* Right Column: Dashboard */}
         <div className="lg:col-span-8">
           <section className="bg-zinc-900/40 border border-zinc-800 rounded-2xl min-h-[600px] flex flex-col">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
-              <h2 className="text-lg font-medium flex items-center space-x-2">
-                <BarChart3 className="w-5 h-5 text-emerald-400" />
-                <span>Dynamic Dashboard</span>
-              </h2>
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex bg-zinc-900/80 p-1 rounded-lg border border-zinc-800">
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    activeTab === 'dashboard' ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+                  )}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={data.length === 0}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    activeTab === 'report' ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200",
+                    data.length === 0 && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>AI Report</span>
+                </button>
+              </div>
               {data.length > 0 && (
                 <span className="text-xs font-medium text-zinc-400 bg-zinc-800 px-2.5 py-1 rounded-full">
                   {data.length} records
@@ -189,38 +226,64 @@ export default function App() {
               )}
             </div>
 
-            <div className="flex-1 relative">
+            <div className="flex-1 relative overflow-y-auto">
               <AnimatePresence mode="wait">
-                {isGeneratingDashboard ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400"
-                  >
-                    <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
-                    <p>Analyzing dataset and generating insights...</p>
-                  </motion.div>
-                ) : data.length > 0 && configs.length > 0 ? (
-                  <motion.div
-                    key="dashboard"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="h-full"
-                  >
-                    <Dashboard data={data} configs={configs} />
-                  </motion.div>
+                {activeTab === 'dashboard' ? (
+                  isGeneratingDashboard ? (
+                    <motion.div
+                      key="loading-dash"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400"
+                    >
+                      <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
+                      <p>Analyzing dataset and generating insights...</p>
+                    </motion.div>
+                  ) : data.length > 0 && configs.length > 0 ? (
+                    <motion.div
+                      key="dashboard"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="h-full"
+                    >
+                      <Dashboard data={data} configs={configs} />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500"
+                    >
+                      <BarChart3 className="w-16 h-16 mb-4 opacity-20" />
+                      <p>Upload a dataset to view your dashboard</p>
+                    </motion.div>
+                  )
                 ) : (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500"
-                  >
-                    <BarChart3 className="w-16 h-16 mb-4 opacity-20" />
-                    <p>Upload a dataset to view your dashboard</p>
-                  </motion.div>
+                  isGeneratingReport ? (
+                    <motion.div
+                      key="loading-report"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400"
+                    >
+                      <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
+                      <p>Analyzing dataset and writing comprehensive report...</p>
+                    </motion.div>
+                  ) : report ? (
+                    <motion.div
+                      key="report"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="p-8"
+                    >
+                      <div className="markdown-body">
+                        <Markdown>{report}</Markdown>
+                      </div>
+                    </motion.div>
+                  ) : null
                 )}
               </AnimatePresence>
             </div>
